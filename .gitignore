@@ -1,0 +1,21 @@
+# Build results
+[Dd]ebug/
+[Rr]elease/
+[Bb]in/
+[Oo]bj/
+
+# Visual Studio files
+.vs/
+.suo
+.user
+*.ide-workspace
+
+# Cross-platform build results
+**/[Bb]in/
+**/[Oo]bj/
+
+# nuget
+*.nuget.props
+*.nuget.targets
+
+appsettings*.json
