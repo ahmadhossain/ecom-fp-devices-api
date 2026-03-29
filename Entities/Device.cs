@@ -19,8 +19,5 @@ namespace ecom_ef_devices_api.Entities
 
         [DynamoDBProperty("updatedAt")]
         public DateTime UpdatedAt { get; set; }
-
-        [DynamoDBProperty]
-        public Dictionary<string, object> ExtraFields { get; set; } = new();
     }
 }

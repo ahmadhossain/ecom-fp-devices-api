@@ -8,16 +8,9 @@ namespace ecom_ef_devices_api.Controllers
     [Route("api/[controller]")]
     public class DeviceController : ControllerBase
     {
-        // private readonly IMongoCollection<Device>? _devices;
         private readonly IDynamoDBContext _context;
 
         public DeviceController(IDynamoDBContext context) => _context = context;
-
-        // [HttpGet]
-        // public async Task<IEnumerable<Device>> Get()
-        // {
-        //     return await _devices.Find(FilterDefinition<Device>.Empty).ToListAsync();
-        // }
 
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(string id)
