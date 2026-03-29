@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Amazon.DynamoDBv2.DataModel;
 
 namespace ecom_ef_devices_api.Entities
@@ -19,5 +20,8 @@ namespace ecom_ef_devices_api.Entities
 
         [DynamoDBProperty("updatedAt")]
         public DateTime UpdatedAt { get; set; }
+
+        [DynamoDBProperty("payload")]
+        public Dictionary<string, object?> Payload { get; set; } = new();
     }
 }
