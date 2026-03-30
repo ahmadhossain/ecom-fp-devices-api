@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using Amazon.DynamoDBv2.DataModel;
 using ecom_ef_devices_api.Entities;
@@ -58,8 +59,28 @@ namespace ecom_ef_devices_api.Controllers
                     _ => filtered,
                 };
             }
+            var result = filtered.ToList();
 
-            return Ok(filtered.ToList());
+            var sb = new StringBuilder();
+
+            sb.AppendLine("DeviceId,DeviceType,CreatedAt,UpdatedAt,Payload");
+
+            foreach (var d in result)
+            {
+                var payloadJson = System.Text.Json.JsonSerializer.Serialize(d.Payload);
+
+                sb.AppendLine(
+                    $"{d.DeviceId},"
+                        + $"{d.DeviceType},"
+                        + $"{d.CreatedAt:o},"
+                        + $"{d.UpdatedAt:o},"
+                        + $"\"{payloadJson.Replace("\"", "\"\"")}\""
+                );
+            }
+
+            var bytes = Encoding.UTF8.GetBytes(sb.ToString());
+
+            return File(bytes, "text/csv", "devices.csv");
         }
 
         [HttpPost]
