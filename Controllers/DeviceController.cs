@@ -14,22 +14,52 @@ namespace ecom_ef_devices_api.Controllers
         public DeviceController(IDynamoDBContext context) => _context = context;
 
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAll(
+            [FromQuery] string? deviceType,
+            [FromQuery] string? deviceId,
+            [FromQuery] string? sortBy = "createdAt",
+            [FromQuery] string? sortOrder = "desc"
+        )
         {
-            var conditions = new List<ScanCondition>();
-            var devices = await _context.ScanAsync<Device>(conditions).GetRemainingAsync();
-            return Ok(devices);
-        }
+            var allDevices = await _context
+                .ScanAsync<Device>(new List<ScanCondition>())
+                .GetRemainingAsync();
 
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetById(string id)
-        {
-            var device = await _context.LoadAsync<Device>(id);
+            var filtered = allDevices.AsQueryable();
 
-            if (device == null)
-                return NotFound(new { message = $"Device with ID '{id}' not found." });
+            if (!string.IsNullOrWhiteSpace(deviceId))
+                filtered = filtered.Where(x => x.DeviceId == deviceId);
 
-            return Ok(device);
+            if (!string.IsNullOrWhiteSpace(deviceType))
+                filtered = filtered.Where(x => x.DeviceType == deviceType);
+
+            if (!string.IsNullOrWhiteSpace(sortBy))
+            {
+                bool isDesc = sortOrder?.ToLower() == "desc";
+
+                filtered = sortBy switch
+                {
+                    "createdAt" => isDesc
+                        ? filtered.OrderByDescending(x => x.CreatedAt)
+                        : filtered.OrderBy(x => x.CreatedAt),
+
+                    "updatedAt" => isDesc
+                        ? filtered.OrderByDescending(x => x.UpdatedAt)
+                        : filtered.OrderBy(x => x.UpdatedAt),
+
+                    "deviceId" => isDesc
+                        ? filtered.OrderByDescending(x => x.DeviceId)
+                        : filtered.OrderBy(x => x.DeviceId),
+
+                    "deviceType" => isDesc
+                        ? filtered.OrderByDescending(x => x.DeviceType)
+                        : filtered.OrderBy(x => x.DeviceType),
+
+                    _ => filtered,
+                };
+            }
+
+            return Ok(filtered.ToList());
         }
 
         [HttpPost]
