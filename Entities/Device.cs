@@ -21,7 +21,7 @@ namespace ecom_ef_devices_api.Entities
         [DynamoDBProperty("updatedAt")]
         public DateTime UpdatedAt { get; set; }
 
-        [DynamoDBProperty("payload")]
+        [DynamoDBProperty("payload", typeof(DictionaryConverter))]
         public Dictionary<string, object?> Payload { get; set; } = new();
     }
 }

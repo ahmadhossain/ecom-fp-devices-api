@@ -13,12 +13,22 @@ namespace ecom_ef_devices_api.Controllers
 
         public DeviceController(IDynamoDBContext context) => _context = context;
 
+        [HttpGet]
+        public async Task<IActionResult> GetAll()
+        {
+            var conditions = new List<ScanCondition>();
+            var devices = await _context.ScanAsync<Device>(conditions).GetRemainingAsync();
+            return Ok(devices);
+        }
+
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(string id)
         {
             var device = await _context.LoadAsync<Device>(id);
+
             if (device == null)
-                return NotFound();
+                return NotFound(new { message = $"Device with ID '{id}' not found." });
+
             return Ok(device);
         }
 
