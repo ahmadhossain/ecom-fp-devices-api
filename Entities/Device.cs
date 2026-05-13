@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations;
 using Amazon.DynamoDBv2.DataModel;
 
 namespace ecom_ef_devices_api.Entities
@@ -16,12 +15,12 @@ namespace ecom_ef_devices_api.Entities
         public string? DeviceType { get; set; }
 
         [DynamoDBProperty("createdAt")]
-        public DateTime CreatedAt { get; set; }
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
 
         [DynamoDBProperty("updatedAt")]
-        public DateTime UpdatedAt { get; set; }
+        public DateTime UpdatedAt { get; set; } = DateTime.Now;
 
-        [DynamoDBProperty("payload", typeof(DictionaryConverter))]
-        public Dictionary<string, object?> Payload { get; set; } = new();
+        [DynamoDBProperty("payload")]
+        public Dictionary<string, object?>? Payload { get; set; }
     }
 }
