@@ -1,5 +1,7 @@
 using System.Text;
 using Amazon.DynamoDBv2.DataModel;
+using Amazon.DynamoDBv2.DocumentModel;
+using ecom_ef_devices_api.Dtos;
 using ecom_ef_devices_api.Entities;
 using Microsoft.AspNetCore.Mvc;
 
@@ -14,89 +16,180 @@ namespace ecom_ef_devices_api.Controllers
         public DeviceController(IDynamoDBContext context) => _context = context;
 
         [HttpGet]
-        public async Task<IActionResult> GetAll(
-            [FromQuery] string? deviceType,
-            [FromQuery] string? deviceId,
-            [FromQuery] string? sortBy = "createdAt",
-            [FromQuery] string? sortOrder = "desc"
-        )
+        public async Task<IActionResult> GetDevices(
+           [FromQuery] string? deviceType,
+           [FromQuery] string? deviceId, 
+           [FromQuery] string? sortBy = "createdAt",
+           [FromQuery] string? sortOrder = "desc")
         {
-            var allDevices = await _context
-                .ScanAsync<Device>(new List<ScanCondition>())
-                .GetRemainingAsync();
-
-            var filtered = allDevices.AsQueryable();
-
-            if (!string.IsNullOrWhiteSpace(deviceId))
-                filtered = filtered.Where(x => x.DeviceId == deviceId);
+            // Scan conditions
+            var conditions = new List<ScanCondition>();
 
             if (!string.IsNullOrWhiteSpace(deviceType))
-                filtered = filtered.Where(x => x.DeviceType == deviceType);
-
-            if (!string.IsNullOrWhiteSpace(sortBy))
             {
-                bool isDesc = sortOrder?.ToLower() == "desc";
-
-                filtered = sortBy switch
-                {
-                    "createdAt" => isDesc
-                        ? filtered.OrderByDescending(x => x.CreatedAt)
-                        : filtered.OrderBy(x => x.CreatedAt),
-
-                    "updatedAt" => isDesc
-                        ? filtered.OrderByDescending(x => x.UpdatedAt)
-                        : filtered.OrderBy(x => x.UpdatedAt),
-
-                    "deviceId" => isDesc
-                        ? filtered.OrderByDescending(x => x.DeviceId)
-                        : filtered.OrderBy(x => x.DeviceId),
-
-                    "deviceType" => isDesc
-                        ? filtered.OrderByDescending(x => x.DeviceType)
-                        : filtered.OrderBy(x => x.DeviceType),
-
-                    _ => filtered,
-                };
-            }
-            var result = filtered.ToList();
-
-            var sb = new StringBuilder();
-
-            sb.AppendLine("DeviceId,DeviceType,CreatedAt,UpdatedAt,Payload");
-
-            foreach (var d in result)
-            {
-                var payloadJson = System.Text.Json.JsonSerializer.Serialize(d.Payload);
-
-                sb.AppendLine(
-                    $"{d.DeviceId},"
-                        + $"{d.DeviceType},"
-                        + $"{d.CreatedAt:o},"
-                        + $"{d.UpdatedAt:o},"
-                        + $"\"{payloadJson.Replace("\"", "\"\"")}\""
-                );
+                conditions.Add(
+                    new ScanCondition(
+                        "DeviceType",
+                        ScanOperator.Equal,
+                        deviceType));
             }
 
-            var bytes = Encoding.UTF8.GetBytes(sb.ToString());
+            if (!string.IsNullOrWhiteSpace(deviceId))
+            {
+                conditions.Add(
+                    new ScanCondition(
+                        "DeviceId",
+                        ScanOperator.Equal,
+                        deviceId));
+            }
 
-            return File(bytes, "text/csv", "devices.csv");
+            // Scan DynamoDB
+            var search = _context.ScanAsync<Device>(conditions);
+
+            var devices = await search.GetRemainingAsync();
+
+            // Normalize
+            sortBy = sortBy?.ToLower();
+            sortOrder = sortOrder?.ToLower();
+
+            // Sorting
+            devices = sortBy switch
+            {
+                "deviceid" => sortOrder == "asc"
+                    ? devices.OrderBy(x => x.DeviceId).ToList()
+                    : devices.OrderByDescending(x => x.DeviceId).ToList(),
+
+                "devicetype" => sortOrder == "asc"
+                    ? devices.OrderBy(x => x.DeviceType).ToList()
+                    : devices.OrderByDescending(x => x.DeviceType).ToList(),
+
+                "updatedat" => sortOrder == "asc"
+                    ? devices.OrderBy(x => x.UpdatedAt).ToList()
+                    : devices.OrderByDescending(x => x.UpdatedAt).ToList(),
+
+                "createdat" => sortOrder == "asc"
+                    ? devices.OrderBy(x => x.CreatedAt).ToList()
+                    : devices.OrderByDescending(x => x.CreatedAt).ToList(),
+
+                _ => sortOrder == "asc"
+                    ? devices.OrderBy(x => x.CreatedAt).ToList()
+                    : devices.OrderByDescending(x => x.CreatedAt).ToList()
+            };
+
+
+            return Ok(devices);
+        }
+
+        [HttpGet("export")]
+        public async Task<IActionResult> DownloadDevicesCsv(
+        [FromQuery] string? deviceType,
+        [FromQuery] string? deviceId,
+        [FromQuery] string? sortBy = "createdAt",
+        [FromQuery] string? sortOrder = "desc")
+        {
+            // Scan conditions
+            var conditions = new List<ScanCondition>();
+
+            if (!string.IsNullOrWhiteSpace(deviceType))
+            {
+                conditions.Add(
+                    new ScanCondition(
+                        "DeviceType",
+                        ScanOperator.Equal,
+                        deviceType));
+            }
+
+            if (!string.IsNullOrWhiteSpace(deviceId))
+            {
+                conditions.Add(
+                    new ScanCondition(
+                        "DeviceId",
+                        ScanOperator.Equal,
+                        deviceId));
+            }
+
+            // Get data
+            var search = _context.ScanAsync<Device>(conditions);
+
+            var devices = await search.GetRemainingAsync();
+
+            // Sorting
+            sortBy = sortBy?.ToLower();
+            sortOrder = sortOrder?.ToLower();
+
+            devices = sortBy switch
+            {
+                "deviceid" => sortOrder == "asc"
+                    ? devices.OrderBy(x => x.DeviceId).ToList()
+                    : devices.OrderByDescending(x => x.DeviceId).ToList(),
+
+                "devicetype" => sortOrder == "asc"
+                    ? devices.OrderBy(x => x.DeviceType).ToList()
+                    : devices.OrderByDescending(x => x.DeviceType).ToList(),
+
+                "updatedat" => sortOrder == "asc"
+                    ? devices.OrderBy(x => x.UpdatedAt).ToList()
+                    : devices.OrderByDescending(x => x.UpdatedAt).ToList(),
+
+                _ => sortOrder == "asc"
+                    ? devices.OrderBy(x => x.CreatedAt).ToList()
+                    : devices.OrderByDescending(x => x.CreatedAt).ToList()
+            };
+
+            // CSV Builder
+            var csv = new StringBuilder();
+
+            // Header
+            csv.AppendLine(
+                "Id,DeviceId,DeviceType,CreatedAt,UpdatedAt,Payload");
+
+            // Rows
+            foreach (var device in devices)
+            {
+                var payloadJson =
+                    System.Text.Json.JsonSerializer.Serialize(
+                        device.Payload);
+
+                csv.AppendLine(string.Join(",",
+                    EscapeCsv(device.Id),
+                    EscapeCsv(device.DeviceId),
+                    EscapeCsv(device.DeviceType),
+                    EscapeCsv(device.CreatedAt.ToString("o")),
+                    EscapeCsv(device.UpdatedAt.ToString("o")),
+                    EscapeCsv(payloadJson)
+                ));
+            }
+
+            var bytes = Encoding.UTF8.GetBytes(csv.ToString());
+
+            return File(
+                bytes,
+                "text/csv",
+                $"devices-{DateTime.UtcNow:yyyyMMddHHmmss}.csv");
+        }
+
+        private string EscapeCsv(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return "\"\"";
+
+            return $"\"{value.Replace("\"", "\"\"")}\"";
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create(Device device)
+        public async Task<IActionResult> Create([FromBody] CreateDeviceRequest request)
         {
-            if (device.Payload != null)
+            var device = new Device
             {
-                device.Payload =
-                    JsonElementConverter.ConvertJsonElements(device.Payload);
-            }
+                DeviceId = request.DeviceId,
+                DeviceType = request.DeviceType,
+                Payload = request.Payload
+            };
 
             await _context.SaveAsync(device);
 
             return Ok(device);
         }
-
-        
     }
 }
 

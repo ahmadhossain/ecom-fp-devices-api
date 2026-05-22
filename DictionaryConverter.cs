@@ -1,71 +1,177 @@
+using System.Text.Json;
 using Amazon.DynamoDBv2.DataModel;
 using Amazon.DynamoDBv2.DocumentModel;
 
 public class DictionaryConverter : IPropertyConverter
 {
-    // ✅ Called when SAVING to DynamoDB — converts Dictionary → DynamoDBEntry
     public DynamoDBEntry ToEntry(object value)
     {
-        if (value is not Dictionary<string, object?> dict)
-            return new DynamoDBNull();
+        var dict =
+            value as Dictionary<string, object?> ?? [];
 
-        var document = new Document();
-        foreach (var kvp in dict)
-            document[kvp.Key] = ConvertToEntry(kvp.Value);
-
-        return document;
+        return ConvertDictionaryToDocument(dict);
     }
 
-    // ✅ Called when READING from DynamoDB — converts DynamoDBEntry → Dictionary
     public object FromEntry(DynamoDBEntry entry)
     {
-        return entry switch
-        {
-            Document document => DocumentToDictionary(document),
-            DynamoDBList list => list.Entries.Select(e => FromEntry(e)).ToList(),
-            Primitive prim => prim.Value,
-            DynamoDBNull => null!,
-            _ => entry.ToString()!,
-        };
+        return ConvertFromEntry(entry);
     }
 
-    // ✅ Recursively converts DynamoDB Document → Dictionary<string, object?>
-    private Dictionary<string, object?> DocumentToDictionary(Document document)
-    {
-        var dict = new Dictionary<string, object?>();
+    // -----------------------------
+    // TO DYNAMODB
+    // -----------------------------
 
-        foreach (var kvp in document)
+    private Document ConvertDictionaryToDocument(
+        Dictionary<string, object?> dict)
+    {
+        var doc = new Document();
+
+        foreach (var kv in dict)
         {
-            dict[kvp.Key] = kvp.Value switch
-            {
-                Document nested => DocumentToDictionary(nested),
-                DynamoDBList list => list.Entries.Select(e => FromEntry(e)).ToList(),
-                Primitive prim => prim.Value,
-                DynamoDBNull => null,
-                _ => kvp.Value.ToString(),
-            };
+            doc[kv.Key] =
+                ConvertToDynamoEntry(kv.Value);
         }
 
-        return dict;
+        return doc;
     }
 
-    // ✅ Recursively converts .NET object → DynamoDBEntry
-    private DynamoDBEntry ConvertToEntry(object? value)
+    private DynamoDBEntry ConvertToDynamoEntry(
+        object? value)
     {
+        if (value == null)
+            return new Primitive();
+
+        // Handle JsonElement
+        if (value is JsonElement json)
+        {
+            return ConvertJsonElement(json);
+        }
+
         return value switch
         {
-            null => new DynamoDBNull(),
             string s => new Primitive(s),
-            bool b => new Primitive(b.ToString().ToLower()),
-            int i => new Primitive(i.ToString(), true),
-            long l => new Primitive(l.ToString(), true),
-            float f => new Primitive(f.ToString(), true),
-            double d => new Primitive(d.ToString(), true),
-            decimal dec => new Primitive(dec.ToString(), true),
-            Dictionary<string, object?> d => ToEntry(d),
-            List<object?> list => new DynamoDBList(list.Select(ConvertToEntry)),
-            IEnumerable<object?> enumerable => new DynamoDBList(enumerable.Select(ConvertToEntry)),
-            _ => new Primitive(value.ToString()),
+
+            int i => new Primitive(i.ToString()),
+            long l => new Primitive(l.ToString()),
+            double d => new Primitive(d.ToString()),
+            decimal m => new Primitive(m.ToString()),
+
+            bool b => new DynamoDBBool(b),
+
+            Dictionary<string, object?> dict =>
+                ConvertDictionaryToDocument(dict),
+
+            List<object?> list =>
+                new DynamoDBList(
+                    list.Select(ConvertToDynamoEntry)
+                        .ToList()),
+
+            _ => new Primitive(value.ToString())
         };
+    }
+
+    private DynamoDBEntry ConvertJsonElement(
+        JsonElement json)
+    {
+        switch (json.ValueKind)
+        {
+            case JsonValueKind.Object:
+
+                var doc = new Document();
+
+                foreach (var prop in json.EnumerateObject())
+                {
+                    doc[prop.Name] =
+                        ConvertJsonElement(prop.Value);
+                }
+
+                return doc;
+
+            case JsonValueKind.Array:
+
+                var list = new DynamoDBList();
+
+                foreach (var item in json.EnumerateArray())
+                {
+                    list.Add(ConvertJsonElement(item));
+                }
+
+                return list;
+
+            case JsonValueKind.String:
+                return new Primitive(json.GetString());
+
+            case JsonValueKind.Number:
+
+                if (json.TryGetInt64(out var l))
+                    return new Primitive(l.ToString());
+
+                return new Primitive(
+                    json.GetDouble().ToString());
+
+            case JsonValueKind.True:
+                return new DynamoDBBool(true);
+
+            case JsonValueKind.False:
+                return new DynamoDBBool(false);
+
+            case JsonValueKind.Null:
+                return new Primitive();
+
+            default:
+                return new Primitive(json.ToString());
+        }
+    }
+
+    // -----------------------------
+    // FROM DYNAMODB
+    // -----------------------------
+
+    private object? ConvertFromEntry(
+        DynamoDBEntry entry)
+    {
+        if (entry is Document doc)
+        {
+            var dict =
+                new Dictionary<string, object?>();
+
+            foreach (var key in doc.Keys)
+            {
+                dict[key] =
+                    ConvertFromEntry(doc[key]);
+            }
+
+            return dict;
+        }
+
+        if (entry is DynamoDBList list)
+        {
+            return list.Entries
+                .Select(ConvertFromEntry)
+                .ToList();
+        }
+
+        if (entry is DynamoDBBool boolValue)
+        {
+            return boolValue.Value;
+        }
+
+        if (entry is Primitive primitive)
+        {
+            var value = primitive.Value?.ToString();
+
+            if (long.TryParse(value, out var l))
+                return l;
+
+            if (double.TryParse(value, out var d))
+                return d;
+
+            if (bool.TryParse(value, out var b))
+                return b;
+
+            return value;
+        }
+
+        return null;
     }
 }
