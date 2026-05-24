@@ -20,7 +20,7 @@ namespace ecom_ef_devices_api.Controllers
            [FromQuery] string? deviceType,
            [FromQuery] string? deviceId, 
            [FromQuery] string? sortBy = "createdAt",
-           [FromQuery] string? sortOrder = "desc")
+           [FromQuery] bool isDesc = true)
         {
             // Scan conditions
             var conditions = new List<ScanCondition>();
@@ -50,30 +50,25 @@ namespace ecom_ef_devices_api.Controllers
 
             // Normalize
             sortBy = sortBy?.ToLower();
-            sortOrder = sortOrder?.ToLower();
 
             // Sorting
             devices = sortBy switch
             {
-                "deviceid" => sortOrder == "asc"
-                    ? devices.OrderBy(x => x.DeviceId).ToList()
-                    : devices.OrderByDescending(x => x.DeviceId).ToList(),
+                "deviceid" => isDesc
+                    ? devices.OrderByDescending(x => x.DeviceId).ToList()
+                    : devices.OrderBy(x => x.DeviceId).ToList(),
 
-                "devicetype" => sortOrder == "asc"
-                    ? devices.OrderBy(x => x.DeviceType).ToList()
-                    : devices.OrderByDescending(x => x.DeviceType).ToList(),
+                "devicetype" => isDesc
+                    ? devices.OrderByDescending(x => x.DeviceType).ToList()
+                    : devices.OrderBy(x => x.DeviceType).ToList(),
 
-                "updatedat" => sortOrder == "asc"
-                    ? devices.OrderBy(x => x.UpdatedAt).ToList()
-                    : devices.OrderByDescending(x => x.UpdatedAt).ToList(),
+                "updatedat" => isDesc
+                    ? devices.OrderByDescending(x => x.UpdatedAt).ToList()
+                    : devices.OrderBy(x => x.UpdatedAt).ToList(),
 
-                "createdat" => sortOrder == "asc"
-                    ? devices.OrderBy(x => x.CreatedAt).ToList()
-                    : devices.OrderByDescending(x => x.CreatedAt).ToList(),
-
-                _ => sortOrder == "asc"
-                    ? devices.OrderBy(x => x.CreatedAt).ToList()
-                    : devices.OrderByDescending(x => x.CreatedAt).ToList()
+                _ => isDesc
+                    ? devices.OrderByDescending(x => x.CreatedAt).ToList()
+                    : devices.OrderBy(x => x.CreatedAt).ToList(),
             };
 
 
@@ -85,7 +80,7 @@ namespace ecom_ef_devices_api.Controllers
         [FromQuery] string? deviceType,
         [FromQuery] string? deviceId,
         [FromQuery] string? sortBy = "createdAt",
-        [FromQuery] string? sortOrder = "desc")
+        [FromQuery] bool isDesc = true)
         {
             // Scan conditions
             var conditions = new List<ScanCondition>();
@@ -115,25 +110,24 @@ namespace ecom_ef_devices_api.Controllers
 
             // Sorting
             sortBy = sortBy?.ToLower();
-            sortOrder = sortOrder?.ToLower();
 
             devices = sortBy switch
             {
-                "deviceid" => sortOrder == "asc"
-                    ? devices.OrderBy(x => x.DeviceId).ToList()
-                    : devices.OrderByDescending(x => x.DeviceId).ToList(),
+                "deviceid" => isDesc
+                    ? devices.OrderByDescending(x => x.DeviceId).ToList()
+                    : devices.OrderBy(x => x.DeviceId).ToList(),
 
-                "devicetype" => sortOrder == "asc"
-                    ? devices.OrderBy(x => x.DeviceType).ToList()
-                    : devices.OrderByDescending(x => x.DeviceType).ToList(),
+                "devicetype" => isDesc
+                    ? devices.OrderByDescending(x => x.DeviceType).ToList()
+                    : devices.OrderBy(x => x.DeviceType).ToList(),
 
-                "updatedat" => sortOrder == "asc"
-                    ? devices.OrderBy(x => x.UpdatedAt).ToList()
-                    : devices.OrderByDescending(x => x.UpdatedAt).ToList(),
+                "updatedat" => isDesc
+                    ? devices.OrderByDescending(x => x.UpdatedAt).ToList()
+                    : devices.OrderBy(x => x.UpdatedAt).ToList(),
 
-                _ => sortOrder == "asc"
-                    ? devices.OrderBy(x => x.CreatedAt).ToList()
-                    : devices.OrderByDescending(x => x.CreatedAt).ToList()
+                _ => isDesc
+                    ? devices.OrderByDescending(x => x.CreatedAt).ToList()
+                    : devices.OrderBy(x => x.CreatedAt).ToList(),
             };
 
             // CSV Builder

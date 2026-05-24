@@ -6,8 +6,11 @@ namespace ecom_ef_devices_api.Dtos
     {
         [Required]
         public string? DeviceId { get; set; }
+
         [Required]
         public string? DeviceType { get; set; }
+
+        [Required]
         public Dictionary<string, object?>? Payload { get; set; }
     }
 }
