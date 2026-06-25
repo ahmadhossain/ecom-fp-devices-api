@@ -11,5 +11,5 @@ variable "environment" {
 }
 
 variable "table_name" {
-  default = "ecom-devices"
+  default = "devices"
 }
