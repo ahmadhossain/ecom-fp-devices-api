@@ -56,13 +56,13 @@ Supports schema-less payloads:
 
 ```text
 Controllers/
- ??? DeviceController.cs
+ └── DeviceController.cs
 
 Entities/
- ??? Device.cs
+ └── Device.cs
 
 Dtos/
- ??? CreateDeviceRequest.cs
+ └── CreateDeviceRequest.cs
 ```
 
 ---
@@ -315,4 +315,3 @@ https://localhost:<port>/swagger
 # License
 
 MIT License
-

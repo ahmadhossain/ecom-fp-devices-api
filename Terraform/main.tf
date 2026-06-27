@@ -72,6 +72,8 @@ resource "aws_lambda_function" "ecom_ef_devices_api" {
   handler          = "ecom_ef_devices_api"
   source_code_hash = data.archive_file.lambda.output_base64sha256
   runtime          = "dotnet8"
+  memory_size      = 256
+  timeout          = 30
   depends_on       = [data.archive_file.lambda,aws_iam_role.lambda_role]
   environment {
     variables = {
@@ -80,38 +82,57 @@ resource "aws_lambda_function" "ecom_ef_devices_api" {
   }
 }
 
-resource "aws_lambda_function_url" "ecom_ef_devices_api_url" {
-  function_name      = aws_lambda_function.ecom_ef_devices_api.function_name
-  authorization_type = "NONE"
+# API Gateway
+resource "aws_apigatewayv2_api" "ecom_ef_devices_api" {
+  name          = "${var.project_name}-api"
+  protocol_type = "HTTP"
 
-  cors {
-    allow_credentials = true
-    allow_origins     = ["*"]
-    allow_methods     = ["GET", "POST", "PUT", "DELETE"]
-    allow_headers     = ["content-type", "authorization"]
-    max_age           = 86400
+  cors_configuration {
+    allow_origins = ["*"]
+    allow_methods = ["GET", "POST", "PUT", "DELETE"]
+    allow_headers = ["content-type", "authorization"]
+    max_age       = 86400
   }
 }
 
-resource "aws_lambda_permission" "allow_public_invoke" {
-  statement_id  = "AllowPublicInvoke"
+resource "aws_apigatewayv2_integration" "ecom_ef_devices_api" {
+  api_id                 = aws_apigatewayv2_api.ecom_ef_devices_api.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.ecom_ef_devices_api.invoke_arn
+  payload_format_version = "2.0"
+}
+
+# GET /api/Device?deviceType=&deviceId=&sortBy=&isDesc=
+resource "aws_apigatewayv2_route" "get_devices" {
+  api_id    = aws_apigatewayv2_api.ecom_ef_devices_api.id
+  route_key = "GET /api/Device"
+  target    = "integrations/${aws_apigatewayv2_integration.ecom_ef_devices_api.id}"
+}
+
+# GET /api/Device/export?deviceType=&deviceId=&sortBy=&isDesc=
+resource "aws_apigatewayv2_route" "export_devices" {
+  api_id    = aws_apigatewayv2_api.ecom_ef_devices_api.id
+  route_key = "GET /api/Device/export"
+  target    = "integrations/${aws_apigatewayv2_integration.ecom_ef_devices_api.id}"
+}
+
+# POST /api/Device
+resource "aws_apigatewayv2_route" "create_device" {
+  api_id    = aws_apigatewayv2_api.ecom_ef_devices_api.id
+  route_key = "POST /api/Device"
+  target    = "integrations/${aws_apigatewayv2_integration.ecom_ef_devices_api.id}"
+}
+
+resource "aws_apigatewayv2_stage" "ecom_ef_devices_api" {
+  api_id      = aws_apigatewayv2_api.ecom_ef_devices_api.id
+  name        = "$default"
+  auto_deploy = true
+}
+
+resource "aws_lambda_permission" "allow_api_gateway" {
+  statement_id  = "AllowAPIGatewayInvoke"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.ecom_ef_devices_api.function_name
-  principal     = "*"
-}
-
-resource "aws_lambda_permission" "allow_public_invoke_url" {
-  statement_id           = "AllowPublicInvokeUrl"
-  action                 = "lambda:InvokeFunctionUrl"
-  function_name          = aws_lambda_function.ecom_ef_devices_api.function_name
-  principal              = "*"
-  function_url_auth_type = "NONE"
-}
-
-resource "aws_lambda_permission" "allow_invoke_action" {
-  statement_id              = "FunctionURLAllowInvoke"
-  action                    = "lambda:InvokeFunction"
-  function_name             = aws_lambda_function.ecom_ef_devices_api.function_name
-  principal                 = "*"
-  invoked_via_function_url  = true
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.ecom_ef_devices_api.execution_arn}/*/*"
 }
