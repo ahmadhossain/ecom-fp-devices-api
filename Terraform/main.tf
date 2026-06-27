@@ -123,6 +123,20 @@ resource "aws_apigatewayv2_route" "create_device" {
   target    = "integrations/${aws_apigatewayv2_integration.ecom_ef_devices_api.id}"
 }
 
+# Swagger UI — GET /swagger
+resource "aws_apigatewayv2_route" "swagger_root" {
+  api_id    = aws_apigatewayv2_api.ecom_ef_devices_api.id
+  route_key = "GET /swagger"
+  target    = "integrations/${aws_apigatewayv2_integration.ecom_ef_devices_api.id}"
+}
+
+# Swagger UI — GET /swagger/{proxy+} (index.html, swagger.json, static assets)
+resource "aws_apigatewayv2_route" "swagger_proxy" {
+  api_id    = aws_apigatewayv2_api.ecom_ef_devices_api.id
+  route_key = "GET /swagger/{proxy+}"
+  target    = "integrations/${aws_apigatewayv2_integration.ecom_ef_devices_api.id}"
+}
+
 resource "aws_apigatewayv2_stage" "ecom_ef_devices_api" {
   api_id      = aws_apigatewayv2_api.ecom_ef_devices_api.id
   name        = "$default"
