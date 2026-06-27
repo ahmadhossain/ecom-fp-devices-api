@@ -1,42 +1,81 @@
-# Ecommerce FP Devices API
+# ecom-ef-devices-api
 
-A flexible ASP.NET Core Web API using Amazon DynamoDB for storing and managing dynamic IoT/eCommerce device data.
-
-Supports:
-
-- CSV export
-- Filtering
-- Sorting
-- Dynamic payload fields
-  - Nested objects
-  - Arrays
-- Auto-generated IDs
-- DynamoDB integration
+An ASP.NET Core 8 Web API for storing and managing dynamic IoT/eCommerce device data, backed by Amazon DynamoDB and deployed as an AWS Lambda function behind API Gateway HTTP API (v2), provisioned with Terraform.
 
 ---
 
-# Tech Stack
+## Tech Stack
 
-- ASP.NET Core
-- Amazon DynamoDB
-- Amazon Lambda
-- Terraform
+| Layer | Technology |
+|---|---|
+| Framework | ASP.NET Core 8 (`net8.0`) |
+| Database | Amazon DynamoDB |
+| Runtime | AWS Lambda (dotnet8) |
+| API Gateway | Amazon API Gateway HTTP API (v2, payload format 2.0) |
+| API Docs | Swagger / Swashbuckle |
+| Infrastructure | Terraform >= 1.6, AWS Provider ~> 5.0 |
+
+### NuGet Packages
+
+| Package | Version |
+|---|---|
+| `Amazon.Lambda.AspNetCoreServer.Hosting` | 1.10.0 |
+| `AWSSDK.DynamoDBv2` | 4.0.17.1 |
+| `AWSSDK.Extensions.NETCore.Setup` | 4.0.3.26 |
+| `Swashbuckle.AspNetCore` | 6.6.2 |
 
 ---
 
-# Features
+## Project Structure
 
-## Device Management
+```
+ecom-ef-devices-api/
+├── Controllers/
+│   └── DeviceController.cs       # API endpoints
+├── Dtos/
+│   └── CreateDeviceRequest.cs    # Request DTO with validation
+├── Entities/
+│   └── Device.cs                 # DynamoDB-mapped entity
+├── Terraform/
+│   ├── providers.tf              # AWS provider (us-east-1, ~> 5.0)
+│   ├── variables.tf              # Input variables
+│   ├── main.tf                   # DynamoDB, Lambda, API Gateway, IAM
+│   ├── build.tf                  # dotnet publish + zip via null_resource
+│   └── output.tf                 # API Gateway invoke URL output
+├── DictionaryConverter.cs        # Custom IPropertyConverter for dynamic payloads
+├── Program.cs                    # App entry point, DI, Lambda hosting
+├── appsettings.json
+├── appsettings.Development.json
+├── aws-lambda-tools-defaults.json
+└── ecom_ef_devices_api.csproj
+```
 
-- Create devices
-- Get all devices
-- Filter devices
-- Sort devices
-- Download devices as CSV
+---
+
+## DynamoDB Table
+
+| Property | Value |
+|---|---|
+| Table name | `devices` |
+| Partition key | `id` (String) |
+| Billing mode | PAY_PER_REQUEST |
+
+### Device Schema
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | String | Auto-generated UUID (partition key) |
+| `deviceId` | String | Caller-supplied device identifier |
+| `deviceType` | String | e.g. `oven`, `fridge`, `dishwasher` |
+| `createdAt` | DateTime | Set on creation |
+| `updatedAt` | DateTime | Set on creation |
+| `payload` | Map | Fully dynamic — see below |
+
+---
 
 ## Dynamic Payload Support
 
-Supports schema-less payloads:
+The `payload` field accepts any schema-less JSON object, including nested objects, arrays, numbers, booleans, strings, and nulls. This is handled by the custom `DictionaryConverter` (`IPropertyConverter`) which bi-directionally maps between `Dictionary<string, object?>` and DynamoDB native types.
 
 ```json
 {
@@ -52,105 +91,11 @@ Supports schema-less payloads:
 
 ---
 
-# Project Structure
+## API Endpoints
 
-```text
-Controllers/
- └── DeviceController.cs
+### `POST /api/Device` — Create a Device
 
-Entities/
- └── Device.cs
-
-Dtos/
- └── CreateDeviceRequest.cs
-```
-
----
-
-# Installation
-
-## Clone Project
-
-```bash
-git clone <your-repository-url>
-cd <project-folder>
-```
-
----
-
-## Install Packages
-
-```bash
-dotnet add package AWSSDK.DynamoDBv2
-```
----
-
-# DynamoDB Table
-
-## Table Name
-
-```text
-devices
-```
-
-## Partition Key
-
-```text
-id (String)
-```
-
----
-
-# Create Device Request DTO
-
-```csharp
-using System.ComponentModel.DataAnnotations;
-
-public class CreateDeviceRequest
-{
-    [Required]
-    public string DeviceId { get; set; } = default!;
-
-    [Required]
-    public string DeviceType { get; set; } = default!;
-
-    [Required]
-    public Dictionary<string, object?> Payload
-    {
-        get;
-        set;
-    } = [];
-}
-```
-
----
-
-# DynamicFieldsConverter
-
-The custom converter supports:
-
-- Nested objects
-- Arrays
-- Numbers
-- Booleans
-- Strings
-- Null values
-
-This allows DynamoDB to store fully dynamic payloads.
-
----
-
-# API Endpoints
-
-# Create Device
-
-## Endpoint
-
-```http
-POST /api/device
-```
-
-## Request
+**Request body:**
 
 ```json
 {
@@ -167,7 +112,7 @@ POST /api/device
 }
 ```
 
-## Response
+**Response `200 OK`:**
 
 ```json
 {
@@ -180,138 +125,178 @@ POST /api/device
     "temperature": 220,
     "mode": "bake",
     "active": true,
-    "location": {
-      "room": "Kitchen-A"
-    }
+    "location": { "room": "Kitchen-A" }
   }
 }
 ```
 
 ---
 
-# Get Devices
+### `GET /api/Device` — List Devices
 
-## Endpoint
+| Query Parameter | Type | Default | Description |
+|---|---|---|---|
+| `deviceType` | string | — | Filter by device type |
+| `deviceId` | string | — | Filter by device ID |
+| `sortBy` | string | `createdAt` | `createdAt` \| `updatedAt` \| `deviceId` \| `deviceType` |
+| `isDesc` | bool | `true` | `true` = descending, `false` = ascending |
 
-```http
-GET /api/device
-```
-
-## Query Parameters
-
-| Parameter | Type | Description |
-|---|---|---|
-| deviceId | string | Filter by device ID |
-| deviceType | string | Filter by device type |
-| sortBy | string | createdAt, updatedAt, deviceId, deviceType |
-| isDesc | bool | true = DESC, false = ASC |
-
----
-
-## Example
+**Example:**
 
 ```http
-GET /api/device?deviceType=oven&sortBy=createdAt&isDesc=false
+GET /api/Device?deviceType=oven&sortBy=createdAt&isDesc=false
 ```
 
 ---
 
-# Download CSV
+### `GET /api/Device/export` — Export as CSV
 
-## Endpoint
+Accepts the same query parameters as `GET /api/Device`. Returns a timestamped `.csv` file download.
 
-```http
-GET /api/device/export
-```
-
-## Example
+**Example:**
 
 ```http
-GET /api/device/export?deviceType=oven&sortBy=deviceId&isDesc=true
+GET /api/Device/export?deviceType=oven&sortBy=deviceId&isDesc=true
 ```
 
-Downloads:
+**Downloaded file:** `devices-20260524120000.csv`
 
-```text
-devices-20260524120000.csv
+**CSV columns:** `Id`, `DeviceId`, `DeviceType`, `CreatedAt`, `UpdatedAt`, `Payload`
+
+---
+
+### Swagger UI
+
+```
+GET /swagger
+GET /swagger/{proxy+}
+```
+
+Available at:
+
+```
+https://<id>.execute-api.us-east-1.amazonaws.com/swagger
 ```
 
 ---
 
-# Example Device Payloads
+## Example Device Payloads
 
-## Oven
+### Oven
 
 ```json
-{
-  "deviceId": "oven-001",
-  "deviceType": "oven",
-  "payload": {
-    "temperature": 220,
-    "mode": "bake",
-    "timerMinutes": 45
-  }
-}
+{ "deviceId": "oven-001", "deviceType": "oven", "payload": { "temperature": 220, "mode": "bake", "timerMinutes": 45 } }
 ```
 
----
-
-## Fridge
+### Fridge
 
 ```json
-{
-  "deviceId": "fridge-001",
-  "deviceType": "fridge",
-  "payload": {
-    "currentTemperature": 3,
-    "doorOpen": false
-  }
-}
+{ "deviceId": "fridge-001", "deviceType": "fridge", "payload": { "currentTemperature": 3, "doorOpen": false } }
 ```
 
----
-
-## Dishwasher
+### Dishwasher
 
 ```json
-{
-  "deviceId": "dishwasher-001",
-  "deviceType": "dishwasher",
-  "payload": {
-    "cycle": "eco",
-    "remainingTimeMinutes": 30
-  }
-}
+{ "deviceId": "dishwasher-001", "deviceType": "dishwasher", "payload": { "cycle": "eco", "remainingTimeMinutes": 30 } }
 ```
 
 ---
 
-# Running the Project
+## Running Locally
+
+### Prerequisites
+
+- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
+- AWS credentials configured (`~/.aws/credentials` or environment variables) with DynamoDB access
+- A `devices` DynamoDB table in your target region
+
+### Steps
 
 ```bash
+git clone <your-repository-url>
+cd ecom-ef-devices-api
+
 dotnet restore
-```
-
-```bash
 dotnet build
-```
-
-```bash
 dotnet run
 ```
 
----
+Swagger UI locally:
 
-# Swagger
-
-Swagger is available at:
-
-```text
-https://localhost:<port>/swagger
+```
+https://localhost:7207/swagger
+http://localhost:5041/swagger
 ```
 
 ---
 
-# License
+## Infrastructure (Terraform)
 
-MIT License
+The `Terraform/` directory provisions all required AWS resources.
+
+### Resources
+
+| Resource | Description |
+|---|---|
+| `aws_dynamodb_table` | `devices` table with `id` partition key, PAY_PER_REQUEST |
+| `aws_lambda_function` | `EcomEfDevicesApi` — dotnet8, 256 MB, 30s timeout |
+| `aws_apigatewayv2_api` | HTTP API with CORS (all origins) |
+| `aws_apigatewayv2_integration` | AWS_PROXY → Lambda, payload format 2.0 |
+| `aws_apigatewayv2_route` (×5) | GET /api/Device, GET /api/Device/export, POST /api/Device, GET /swagger, GET /swagger/{proxy+} |
+| `aws_apigatewayv2_stage` | `$default` stage with auto-deploy |
+| `aws_iam_role` | Lambda execution role |
+| `aws_iam_role_policy_attachment` | CloudWatch Logs policy |
+| `aws_iam_policy` | Full DynamoDB access |
+| `aws_lambda_permission` | Grants API Gateway permission to invoke Lambda |
+| `null_resource` | Runs `dotnet publish` and zips output before upload |
+
+### Lambda Configuration
+
+| Property | Value |
+|---|---|
+| Function name | `EcomEfDevicesApi` |
+| Runtime | `dotnet8` |
+| Handler | `ecom_ef_devices_api` |
+| Memory | 256 MB |
+| Timeout | 30 s |
+| Event source | `LambdaEventSource.HttpApi` (payload format 2.0) |
+
+### Deploy
+
+```bash
+cd Terraform
+
+terraform init
+terraform plan
+terraform apply
+```
+
+The API Gateway invoke URL is printed after `apply`:
+
+```
+ecom_ef_devices_api_url = "https://<id>.execute-api.us-east-1.amazonaws.com"
+```
+
+### Terraform Variables (`variables.tf`)
+
+| Variable | Default |
+|---|---|
+| `aws_region` | `us-east-1` |
+| `project_name` | `ecom_ef_devices_api` |
+| `environment` | `Development` |
+| `table_name` | `devices` |
+
+### Build Process (`build.tf`)
+
+Terraform automatically runs `dotnet publish` before packaging the Lambda zip:
+
+```powershell
+dotnet restore ../ecom_ef_devices_api.csproj
+dotnet publish ../ecom_ef_devices_api.csproj -c Release -r linux-x64 --self-contained false -o ../publish
+```
+
+---
+
+## License
+
+MIT
